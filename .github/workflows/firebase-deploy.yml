@@ -12,10 +12,10 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      - name: Deploy no Firebase
-        uses: w9jds/firebase-action@master
+      - name: Deploy no Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
         with:
-          args: deploy --only hosting
-        env:
-          GCP_SA_KEY: ${{ secrets.FIREBASE_TOKEN }}
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          repoToken: '${{ secrets.GITHUB_TOKEN }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_TOKEN }}'
+          channelId: live
+          projectId: mdsoltec-os # ID do seu projeto no Firebase
