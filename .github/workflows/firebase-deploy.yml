@@ -6,16 +6,13 @@ on:
       - main
 
 jobs:
-  build_and_deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do código
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Deploy no Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_TOKEN }}'
-          channelId: live
-          projectId: ods-mdsoltec # ID do seu projeto no Firebase
+      - name: Instalar Firebase CLI e Fazer Deploy
+        run: |
+          npm install -g firebase-tools
+          firebase deploy --only hosting --token "${{ secrets.FIREBASE_TOKEN }}"
