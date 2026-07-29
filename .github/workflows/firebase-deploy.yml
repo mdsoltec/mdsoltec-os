@@ -18,4 +18,4 @@ jobs:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
           firebaseServiceAccount: '${{ secrets.FIREBASE_TOKEN }}'
           channelId: live
-          projectId: mdsoltec-os # ID do seu projeto no Firebase
+          projectId: ods-mdsoltec # ID do seu projeto no Firebase
