@@ -3,36 +3,19 @@ name: Deploy no Firebase Hosting
 on:
   push:
     branches:
-      - main # Troque para 'master' se a sua branch principal tiver esse nome
+      - main
 
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. Baixa o código do repositório
       - name: Checkout do código
         uses: actions/checkout@v4
 
-      # 2. Configura a versão do Node.js
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
+      - name: Deploy no Firebase
+        uses: w9jds/firebase-action@master
         with:
-          node-version: 18
-
-      # 3. Instala as dependências do seu projeto (se houver)
-      - name: Instalar dependências
-        run: npm ci
-
-      # 4. Gera o build do projeto (se for React, Vue, Angular, etc.)
-      # Se for um site HTML/JS estático simples, você pode remover esta linha de baixo
-      - name: Gerar Build
-        run: npm run build
-
-      # 5. Executa o deploy no Firebase
-      - name: Deploy para Firebase
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_TOKEN }}'
-          channelId: live
-          projectId: ods-mdsoltec # ⚠️ Mude aqui para o ID exato do seu projeto no Firebase
+          args: deploy --only hosting
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
