@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="/assets/nova_logo.png" type="image/png">
+  <link rel="stylesheet" href="style.css?v=20260616-8">
+  <title>Estoque - MDSoltec OS</title>
+  <script type="module" src="script.js?v=20260616-16"></script>
+</head>
+<body data-page="estoque">
+  <div class="app-shell">
+    <aside class="app-sidebar">
+      <a class="brand" href="index.html">
+        <img src="/assets/nova_logo.png" alt="MDSoltec">
+        <span>MDSoltec OS</span>
+      </a>
+      <nav class="side-nav" aria-label="Navegação principal">
+        <a class="side-link" data-route="index.html" href="index.html">Dashboard</a>
+        <a class="side-link" data-route="nova-os.html" href="nova-os.html">Nova OS</a>
+        <a class="side-link" data-route="listar-os.html" href="listar-os.html">Ordens de Serviço</a>
+        <a class="side-link" data-route="clientes.html" href="clientes.html">Clientes</a>
+        <a class="side-link" data-route="estoque.html" href="estoque.html">Estoque</a>
+        <a class="side-link" data-route="pdv.html" href="pdv.html">PDV</a>
+        <a class="side-link" data-route="financeiro.html" href="financeiro.html">Financeiro</a>
+        <a class="side-link" data-route="relatorios.html" href="relatorios.html">Relatórios</a>
+        <a class="side-link" data-route="garantias.html" href="garantias.html">Garantias</a>
+        <a class="side-link" data-route="mensagens.html" href="mensagens.html">Mensagens</a>
+        <a class="side-link" data-route="ficha-tecnica.html" href="ficha-tecnica.html">Ficha Técnica</a>
+        <a class="side-link" data-route="configuracoes.html" href="configuracoes.html">Configurações</a>
+      </nav>
+      <div class="sidebar-footer">
+        <a class="support-button" href="mailto:mdsoltec@gmail.com">Suporte</a>
+        <div class="app-version">MDSoltec OS 1.0.0<br>© 2026 MDSoltec</div>
+      </div>
+    </aside>
+
+    <main class="main-shell">
+      <header class="topbar">
+        <div class="nav-strip">
+          <button id="novaOS" type="button" class="top-action">Nova OS</button>
+          <button id="listOS" type="button" class="top-action">Listar OS</button>
+          <button id="clienteID" type="button" class="top-action">Clientes</button>
+          <button id="estoqueID" type="button" class="top-action">Estoque</button>
+          <button id="pdvID" type="button" class="top-action">PDV</button>
+          <button id="financeiroID" type="button" class="top-action">Financeiro</button>
+        </div>
+        <div class="user-menu">
+          <span class="notification">3</span>
+          <span class="avatar">A</span>
+          <span class="user-copy"><strong>Admin</strong><small>Administrador</small></span>
+        </div>
+      </header>
+
+      <section class="page">
+        <div class="page-header">
+          <div>
+            <h1>Estoque</h1>
+            <p class="page-subtitle">Peças técnicas e produtos de venda ficam em estoques separados.</p>
+          </div>
+          <a class="btn" href="#novo-produto">+ Novo cadastro</a>
+        </div>
+
+        <form id="pecaForm" class="form-panel">
+          <div id="novo-produto" class="page-header">
+            <h2 id="estoqueFormTitle" class="page-title">Nova Peça</h2>
+          </div>
+
+          <div class="form-grid">
+            <div id="produtos-pdv" class="field form-row-full">
+              <label for="tipoCadastroEstoque">Tipo de cadastro</label>
+              <select id="tipoCadastroEstoque">
+                <option value="peca">Peça técnica</option>
+                <option value="produto">Produto para venda</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="codigoPeca">Código / SKU</label>
+              <input type="text" id="codigoPeca" placeholder="Ex: DISP-REDMI13C">
+            </div>
+
+            <div class="field stock-piece-field">
+              <label id="tipoPecaLabel" for="tipoPeca">Tipo de Peça</label>
+              <select id="tipoPeca" required>
+                <option value="">Selecione o tipo</option>
+                <option value="Display">Display</option>
+                <option value="Bateria">Bateria</option>
+                <option value="Conector de Carga">Conector de Carga</option>
+                <option value="Câmera">Câmera</option>
+                <option value="Tampa Traseira">Tampa Traseira</option>
+              </select>
+            </div>
+
+            <div class="field stock-product-field" hidden>
+              <label for="categoriaProduto">Categoria do produto</label>
+              <input type="text" id="categoriaProduto" placeholder="Ex: Cabo, capa, película, fone...">
+            </div>
+
+            <div class="field stock-piece-field">
+              <label for="marcaPeca">Marca</label>
+              <select id="marcaPeca" required>
+                <option value="">Selecione a marca</option>
+                <option value="Samsung">Samsung</option>
+                <option value="Apple">Apple</option>
+                <option value="Motorola">Motorola</option>
+                <option value="Xiaomi">Xiaomi</option>
+                <option value="LG">LG</option>
+                <option value="Asus">Asus</option>
+                <option value="Huawei">Huawei</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label id="modeloPecaLabel" for="modeloPeca">Modelo</label>
+              <input type="text" id="modeloPeca" placeholder="Ex: Galaxy A10" required>
+            </div>
+
+            <div class="field">
+              <label for="quantidadePeca">Quantidade</label>
+              <input type="number" id="quantidadePeca" placeholder="0" min="0" required>
+            </div>
+
+            <div class="field">
+              <label for="minimoPeca">Estoque mínimo</label>
+              <input type="number" id="minimoPeca" placeholder="0" min="0">
+            </div>
+
+            <div class="field">
+              <label for="fornecedorPeca">Fornecedor</label>
+              <input type="text" id="fornecedorPeca" placeholder="Nome do fornecedor">
+            </div>
+
+            <div class="field">
+              <label for="dataEntradaPeca">Data de Entrada</label>
+              <input type="date" id="dataEntradaPeca">
+            </div>
+
+            <div class="field">
+              <label for="valor">Custo</label>
+              <input type="text" id="valor" placeholder="R$ 0,00" required>
+            </div>
+
+            <div class="field">
+              <label for="precoVendaPeca">Venda</label>
+              <input type="text" id="precoVendaPeca" placeholder="R$ 0,00">
+            </div>
+
+            <div class="form-actions">
+              <button id="salvarPecaBtn" type="submit" class="btn btn-primary btn-block">Salvar Peça</button>
+              <button id="cancelEditPeca" type="button" class="btn btn-secondary btn-block" hidden>Cancelar edição</button>
+            </div>
+          </div>
+        </form>
+
+        <div class="table-panel section-gap">
+          <div class="panel-header">
+            <h2 class="panel-title">Peças técnicas</h2>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Peça</th>
+                  <th>Marca</th>
+                  <th>Estoque</th>
+                  <th>Mínimo</th>
+                  <th>Custo</th>
+                  <th>Venda</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="listaPecas"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-panel section-gap">
+          <div class="panel-header">
+            <h2 class="panel-title">Produtos para venda</h2>
+            <a class="btn btn-secondary btn-sm" href="#novo-produto" data-stock-mode-link="produto">Novo produto</a>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Categoria</th>
+                  <th>Estoque</th>
+                  <th>Mínimo</th>
+                  <th>Custo</th>
+                  <th>Venda</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="listaProdutos"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

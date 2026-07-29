@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="/assets/nova_logo.png" type="image/png">
+  <link rel="stylesheet" href="style.css?v=20260616-8">
+  <title>Login - MDSoltec OS</title>
+  <script type="module" src="script.js?v=20260616-16"></script>
+</head>
+<body data-page="login">
+  <main class="login-page">
+    <form id="loginForm" class="login-card">
+      <div class="login-brand">
+        <img src="/assets/nova_logo.png" alt="MDSoltec">
+        <h1>MDSoltec OS</h1>
+        <p>Gestão de assistência técnica</p>
+      </div>
+
+      <div class="field">
+        <label for="loginEmail">E-mail</label>
+        <input id="loginEmail" type="email" autocomplete="email">
+      </div>
+
+      <div class="field">
+        <label for="loginSenha">Senha</label>
+        <input id="loginSenha" type="password" autocomplete="current-password">
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Entrar</button>
+      <small id="loginStatus" class="field-status"></small>
+    </form>
+  </main>
+</body>
+</html>
