@@ -23,15 +23,28 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Perfis da equipe (o app lê a lista no login para descobrir o cargo)
-    match /usuarios/{docId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isSignedIn();
+    // Perfis via custom claim "role" (definido com tools/set-user-role.js)
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.role == 'admin';
     }
 
-    // Configurações da empresa e contador de OS
-    match /config/{docId} {
+    // Perfis da equipe: leitura livre autenticada (o app descobre o cargo
+    // no login). Escrita só com claim admin; cada usuário pode renomear
+    // o próprio perfil (nome exibido na topbar).
+    match /usuarios/{docId} {
+      allow read: if isSignedIn();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isSignedIn() && request.auth.token.email == resource.data.email);
+    }
+
+    // Configurações da empresa (escrita admin) e contador de OS
+    // (qualquer autenticado cria OS e precisa incrementar).
+    match /config/contadorOS {
       allow read, write: if isSignedIn();
+    }
+    match /config/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // PORTAL DO CLIENTE: leitura pública SEM login. O app grava aqui

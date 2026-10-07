@@ -57,6 +57,21 @@ Configure o Firebase local (opcional, para emulador de Firestore) em
 `firebase.json`. Login e banco de produção: usar apenas via site publicado
 ou `firebase use <projeto>` correto.
 
+## Recursos 1.4.0
+
+- **Arquitetura modular**: `script.js` (3,5 mil linhas) virou `js/core.js`
+  (núcleo Firebase/estado/UI), `js/pdf.js` (documentos) e `js/app.js`
+  (páginas) — cada página carrega só o que usa.
+- **Paginação server-side na Lista de OS**: lê 50 registros por vez
+  (cursor + `orderBy data desc`) com contador real (`getCountFromServer`)
+  e botão "Carregar mais". Com 5 mil OS, a tela deixa de ler 5 mil docs.
+- **Perfis no servidor (custom claims)**: o cargo vem do token de
+  identidade, não do navegador. Conceda com:
+  `cd tools && npm install && GOOGLE_APPLICATION_CREDENTIALS=chave.json node set-user-role.js email admin`
+  Regras: só `admin` gerencia usuários/configurações (cada um pode
+  renomear o próprio perfil). Sem o claim, a pessoa continua usando o
+  sistema — só não gerencia.
+
 ## Recursos 1.3.0
 
 - **Robustez**: número de OS via `runTransaction` (sem duplicar) e venda do

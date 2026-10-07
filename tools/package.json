@@ -1,0 +1,9 @@
+{
+  "name": "mdsoltec-os-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ferramentas administrativas do MDSoltec OS (requer chave de conta de serviço).",
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

@@ -429,11 +429,16 @@ async function restoreSessionFromAuthUser(user) {
   if (!user?.email) return null;
 
   const profile = await findUserProfile(user.email);
+  let role = profile?.role || profile?.perfil || "atendente";
+  try {
+    const token = await user.getIdTokenResult();
+    if (token.claims?.role) role = token.claims.role; // claim do servidor manda
+  } catch (error) { console.warn("Claim de perfil indisponível:", error); }
   const session = {
     nome: profile?.nome || user.displayName || "Usuário",
     email: user.email,
-    role: profile?.role || profile?.perfil || "atendente",
-    cargo: profile?.cargo || "Usuário"
+    role,
+    cargo: profile?.cargo || role
   };
   setSession(session);
   return session;
@@ -1001,7 +1006,7 @@ function setText(id, value) {
 }
 
 /* ── Versão centralizada: atualize só aqui (rodapé da sidebar) ── */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 document.querySelectorAll(".app-version").forEach((el) => {
   el.innerHTML = `MDSoltec OS ${APP_VERSION}<br>© ${new Date().getFullYear()} MDSoltec`;
 });

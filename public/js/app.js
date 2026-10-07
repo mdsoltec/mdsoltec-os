@@ -230,11 +230,15 @@ function initLogin() {
     try {
       const credentials = await signInWithEmailAndPassword(auth, email, senha);
       const profile = await findUserProfile(credentials.user.email);
+      // O claim do token (definido no servidor via tools/set-user-role.js)
+      // manda sobre o cadastro local — perfis não se alteram no navegador.
+      const token = await credentials.user.getIdTokenResult();
+      const role = token.claims?.role || profile?.role || profile?.perfil || "atendente";
       setSession({
         nome: profile?.nome || credentials.user.displayName || "Usuário",
         email: credentials.user.email,
-        role: profile?.role || profile?.perfil || "atendente",
-        cargo: profile?.cargo || "Usuário"
+        role,
+        cargo: profile?.cargo || role
       });
       window.location.href = "index.html";
       return;
@@ -633,23 +637,57 @@ async function carregarDatalists() {
 function initListarOS() {
   const listaOS = byId("listaOS");
   if (!listaOS) return;
+  renderSkeleton(listaOS, { cols: 7 });
 
   const filtroCliente = byId("filtroCliente");
   const filtroStatus = byId("filtroStatus");
+  const btnMais = byId("carregarMaisOS");
+  const info = byId("osCountInfo");
+  const PAGE_SIZE = 50;
 
-  const load = async () => {
-    const ordens = await getCollectionData("ordensServico");
-    renderOrdens(listaOS, ordens, filtroCliente?.value, filtroStatus?.value);
+  let ordensCarregadas = [];
+  let ultimoDoc = null;
+  let totalOS = 0;
+
+  const aplicarFiltros = () => renderOrdens(listaOS, ordensCarregadas, filtroCliente?.value, filtroStatus?.value);
+
+  const atualizarRodape = () => {
+    if (info) info.textContent = totalOS > ordensCarregadas.length
+      ? `Mostrando ${ordensCarregadas.length} de ${totalOS} OS (mais recentes primeiro)`
+      : `${ordensCarregadas.length} OS`;
+    if (btnMais) btnMais.hidden = ordensCarregadas.length >= totalOS;
   };
 
-  renderSkeleton(listaOS, { cols: 7 });
+  // Paginação no servidor: lê apenas 50 OS por vez (a mais recente primeiro).
+  // Com 5 mil OS, a tela deixa de ler 5 mil documentos a cada visita.
+  const carregar = async (reiniciar = true) => {
+    try {
+      if (reiniciar) { ordensCarregadas = []; ultimoDoc = null; }
+      const base = [collection(db, "ordensServico"), where("excluidoEm", "==", null), orderBy("data", "desc")];
+      const cursor = ultimoDoc ? [startAfter(ultimoDoc)] : [];
+      const snap = await getDocs(query(...base, ...cursor, limit(PAGE_SIZE)));
+      ordensCarregadas.push(...snap.docs.map((item) => ({ id: item.id, ...item.data() })));
+      if (snap.docs.length) ultimoDoc = snap.docs[snap.docs.length - 1];
+      aplicarFiltros();
+      try {
+        if (reiniciar) totalOS = (await getCountFromServer(collection(db, "ordensServico"))).data().count;
+      } catch (_) { totalOS = ordensCarregadas.length; }
+      atualizarRodape();
+    } catch (error) {
+      console.error("Erro ao carregar OS:", error);
+      showFirestoreNotice(error);
+    }
+  };
 
-  filtroCliente?.addEventListener("input", load);
-  filtroStatus?.addEventListener("change", load);
-  load();
+  window.__rvReloadOrdens = () => carregar(true);
 
-  // Tempo real: OS criadas/editadas por outro usuário aparecem sozinhas.
-  scheduleAfterSnapshots(["ordensServico"], load);
+  filtroCliente?.addEventListener("input", aplicarFiltros);
+  filtroStatus?.addEventListener("change", aplicarFiltros);
+  btnMais?.addEventListener("click", () => carregar(false));
+  carregar(true);
+
+  // Tempo real: volta à primeira página quando algo muda no banco.
+  scheduleAfterSnapshots(["ordensServico"], () => carregar(true));
 }
 
 function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") {
@@ -712,8 +750,12 @@ function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") 
       try {
         await softDeleteDoc(doc(db, "ordensServico", button.dataset.delete));
         showToast("OS movida para a lixeira (Configurações).", "success");
-        const ordens = await getCollectionData("ordensServico");
-        renderOrdens(container, ordens, byId("filtroCliente")?.value, byId("filtroStatus")?.value);
+        if (typeof window.__rvReloadOrdens === "function") {
+          window.__rvReloadOrdens();
+        } else {
+          const ordens = await getCollectionData("ordensServico");
+          renderOrdens(container, ordens, byId("filtroCliente")?.value, byId("filtroStatus")?.value);
+        }
       } catch (error) {
         console.error("Erro ao excluir OS:", error);
         showToast("Erro ao excluir OS.");
