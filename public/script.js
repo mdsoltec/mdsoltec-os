@@ -133,6 +133,7 @@ function routeFromHref(href) {
 document.addEventListener("DOMContentLoaded", async () => {
   ensurePdvNavigation();
   initNavigation();
+  initIcons();
   initMobileSidebar();
   const sessionReady = await initSessionControls();
   if (!sessionReady) return;
@@ -430,7 +431,7 @@ function getAuthUserOnce(timeoutMs = 800) {
   });
 }
 
-async function restoreSessionFc function restoreSessionFromAuthUser(user) {
+async function restoreSessionFromAuthUser(user) {
   if (!user?.email) return null;
 
   const profile = await findUserProfile(user.email);
@@ -943,6 +944,9 @@ function initTopbar() {
   });
 
   loadSystemNotifications();
+
+  // Tempo real: badge e painel de notificações se atualizam sozinhos.
+  scheduleAfterSnapshots(["ordensServico", "estoque", "produtos"], loadSystemNotifications, 800);
 }
 
 async function loadSystemNotifications() {
@@ -1453,9 +1457,6 @@ async function carregarDatalists() {
     estoqueCache = estoque;
     if (aparelhosList) {
       aparelhosList.innerHTML = estoque
-        .map((peca) => `<option value="${escapeHtml(peca.marca || "")} ${escapeHtml(peca.modelo || "toque;
-    if (aparelhosList) {
-      aparelhosList.innerHTML = estoque
         .map((peca) => `<option value="${escapeHtml(peca.marca || "")} ${escapeHtml(peca.modelo || "")}"></option>`)
         .join("");
     }
@@ -1480,9 +1481,14 @@ function initListarOS() {
     renderOrdens(listaOS, ordens, filtroCliente?.value, filtroStatus?.value);
   };
 
+  renderSkeleton(listaOS, { cols: 7 });
+
   filtroCliente?.addEventListener("input", load);
   filtroStatus?.addEventListener("change", load);
   load();
+
+  // Tempo real: OS criadas/editadas por outro usuário aparecem sozinhas.
+  scheduleAfterSnapshots(["ordensServico"], load);
 }
 
 function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") {
@@ -3130,27 +3136,6 @@ function initBuscaCliente() {
 
     const clientes = await getCollectionData("clientes");
     const matches = clientes.filter((cliente) => {
-      const nomeMatch = normalizeText(cliente.nome).includes(termo);
-      const cpfMatch = String(cliente.cpfCnpj || "").replace(/\D/g, "").includes(termo.replace(/\D/g, ""));
-      return nomeMatch || cpfMatch;
-    });
-
-    resultadoBusca.innerHTML = matches
-      .map((cliente) => `
-        <li class="compact-item">
-          <span><strong>${escapeHtml(cliente.nome || "-")}</strong><br><small>${escapeHtml(cliente.cpfCnpj || "")}</small></span>
-          <strong>${escapeHtml(cliente.telefone || "")}</strong>
-        </li>
-      `)
-      .join("");
-    resultadoBusca.style.display = matches.length ? "block" : "none";
-  });
-
-  document.addEventListener("click", (event) => {
-    if (!formBusca.contains(event.target)) resultadoBusca.style.display = "none";
-  });
-}
- {
       const nomeMatch = normalizeText(cliente.nome).includes(termo);
       const cpfMatch = String(cliente.cpfCnpj || "").replace(/\D/g, "").includes(termo.replace(/\D/g, ""));
       return nomeMatch || cpfMatch;
