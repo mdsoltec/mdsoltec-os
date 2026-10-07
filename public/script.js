@@ -3,13 +3,13 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebas
 import {
   getFirestore,
   collection,
-  addDoc,
+  addDoc as fsAddDoc,
   getDocs,
   getDoc,
-  setDoc,
-  deleteDoc,
+  setDoc as fsSetDoc,
+  deleteDoc as fsDeleteDoc,
   doc,
-  updateDoc
+  updateDoc as fsUpdateDoc
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
   getAuth,
@@ -39,6 +39,37 @@ let produtosCache = [];
 let editingPecaId = null;
 let editingProdutoId = null;
 let pdvCarrinho = [];
+
+/* ── Cache de leitura + invalidação automática nas escritas ── */
+const COLLECTION_CACHE_TTL_MS = 30000;
+const collectionCache = new Map();    // nome -> { data, ts }
+const collectionInFlight = new Map(); // nome -> Promise em andamento
+
+function invalidateCollection(...names) {
+  names.forEach((name) => {
+    collectionCache.delete(name);
+    collectionInFlight.delete(name);
+  });
+}
+
+// Wrappers: qualquer escrita no app invalida o cache da coleção tocada,
+// inclusive escritas futuras que usarem estes helpers.
+function collectionIdOf(ref) {
+  try { return ref.parent.id; } catch (error) { return ""; }
+}
+function addDoc(ref, data) {
+  return fsAddDoc(ref, data).then((result) => { invalidateCollection(collectionIdOf(ref)); return result; });
+}
+function updateDoc(ref, data) {
+  return fsUpdateDoc(ref, data).then((result) => { invalidateCollection(collectionIdOf(ref)); return result; });
+}
+function setDoc(ref, data, options) {
+  const promise = options ? fsSetDoc(ref, data, options) : fsSetDoc(ref, data);
+  return promise.then((result) => { invalidateCollection(collectionIdOf(ref)); return result; });
+}
+function deleteDoc(ref) {
+  return fsDeleteDoc(ref).then((result) => { invalidateCollection(collectionIdOf(ref)); return result; });
+}
 
 const SESSION_KEY = "mdsoltecUser";
 const SIGNED_OUT_KEY = "mdsoltecSignedOut";
@@ -2863,6 +2894,27 @@ function initBuscaCliente() {
 
     const clientes = await getCollectionData("clientes");
     const matches = clientes.filter((cliente) => {
+      const nomeMatch = normalizeText(cliente.nome).includes(termo);
+      const cpfMatch = String(cliente.cpfCnpj || "").replace(/\D/g, "").includes(termo.replace(/\D/g, ""));
+      return nomeMatch || cpfMatch;
+    });
+
+    resultadoBusca.innerHTML = matches
+      .map((cliente) => `
+        <li class="compact-item">
+          <span><strong>${escapeHtml(cliente.nome || "-")}</strong><br><small>${escapeHtml(cliente.cpfCnpj || "")}</small></span>
+          <strong>${escapeHtml(cliente.telefone || "")}</strong>
+        </li>
+      `)
+      .join("");
+    resultadoBusca.style.display = matches.length ? "block" : "none";
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!formBusca.contains(event.target)) resultadoBusca.style.display = "none";
+  });
+}
+ {
       const nomeMatch = normalizeText(cliente.nome).includes(termo);
       const cpfMatch = String(cliente.cpfCnpj || "").replace(/\D/g, "").includes(termo.replace(/\D/g, ""));
       return nomeMatch || cpfMatch;
