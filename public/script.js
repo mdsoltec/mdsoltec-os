@@ -9,7 +9,8 @@ import {
   setDoc as fsSetDoc,
   deleteDoc as fsDeleteDoc,
   doc,
-  updateDoc as fsUpdateDoc
+  updateDoc as fsUpdateDoc,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
   getAuth,
@@ -551,15 +552,67 @@ function fillClienteNaOS(cliente) {
   setValue("clienteEnderecoInput", composeAddress(cliente));
 }
 
-async function getCollectionData(name) {
+async function getCollectionData(name, { maxAgeMs = COLLECTION_CACHE_TTL_MS } = {}) {
+  // Cache em memória com TTL curto: evita reler a coleção INTEIRA a cada
+  // tecla/interação (o Firestore cobra por documento lido). Escritas
+  // invalidam automaticamente (wrappers abaixo); snapshots em tempo real
+  // (listenCollection) também atualizam o cache, e entre eles a janela
+  // máxima de obsolescência é o TTL.
+  const cached = collectionCache.get(name);
+  if (cached && Date.now() - cached.ts < maxAgeMs) return cached.data;
+
+  const inFlight = collectionInFlight.get(name);
+  if (inFlight) return inFlight; // dedupe de chamadas simultâneas
+
+  const promise = (async () => {
+    try {
+      const snapshot = await getDocs(collection(db, name));
+      const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      collectionCache.set(name, { data, ts: Date.now() });
+      return data;
+    } catch (error) {
+      console.error(`Erro ao carregar ${name}:`, error);
+      showFirestoreNotice(error);
+      return [];
+    } finally {
+      collectionInFlight.delete(name);
+    }
+  })();
+
+  collectionInFlight.set(name, promise);
+  return promise;
+}
+
+/* ── Tempo real: mantém o cache atualizado e reage a mudanças ──
+   Cada snapshot alimenta o cache (todas as telas que leem
+   getCollectionData passam a ver o dado novo) e chama onChange.
+   Erros ficam em console.warn: o app segue funcionando se o
+   ouvinte for negado (ex.: sessão expirada). */
+function listenCollection(name, onChange) {
   try {
-    const snapshot = await getDocs(collection(db, name));
-    return snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    return onSnapshot(collection(db, name), (snapshot) => {
+      const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      collectionCache.set(name, { data, ts: Date.now() });
+      try { onChange?.(data); } catch (error) { console.warn(`Reação a mudanças em ${name} falhou:`, error); }
+    }, (error) => console.warn(`Ouvinte ${name} indisponível:`, error.code || error));
   } catch (error) {
-    console.error(`Erro ao carregar ${name}:`, error);
-    showFirestoreNotice(error);
-    return [];
+    console.warn(`Ouvinte ${name} não iniciado:`, error);
+    return () => {};
   }
+}
+
+/* Agrupa rajadas de snapshots numa única atualização (debounce). */
+function scheduleAfterSnapshots(names, run, delay = 500) {
+  let queued = false;
+  const schedule = () => {
+    if (queued) return;
+    queued = true;
+    setTimeout(async () => {
+      queued = false;
+      try { await run(); } catch (error) { console.warn("Atualização em tempo real falhou:", error); }
+    }, delay);
+  };
+  names.forEach((name) => listenCollection(name, schedule));
 }
 
 function showFirestoreNotice(error) {
@@ -1332,6 +1385,9 @@ async function carregarDatalists() {
   if (aparelhosList || pecasList) {
     const estoque = await getCollectionData("estoque");
     estoqueCache = estoque;
+    if (aparelhosList) {
+      aparelhosList.innerHTML = estoque
+        .map((peca) => `<option value="${escapeHtml(peca.marca || "")} ${escapeHtml(peca.modelo || "toque;
     if (aparelhosList) {
       aparelhosList.innerHTML = estoque
         .map((peca) => `<option value="${escapeHtml(peca.marca || "")} ${escapeHtml(peca.modelo || "")}"></option>`)
@@ -2404,22 +2460,40 @@ async function gerarMensagensPendentes() {
 async function initDashboard() {
   if (page !== "dashboard") return;
 
-  const [ordens, estoque, produtos, vendasPDV] = await Promise.all([
-    getCollectionData("ordensServico"),
-    getCollectionData("estoque"),
-    getCollectionData("produtos"),
-    getCollectionData("vendasPDV")
-  ]);
-  const custosEstoque = [...estoque, ...produtos];
-
   const monthSelect = byId("dashboardMonth");
-  const selectedMonth = populateMonthSelect(
-    monthSelect,
-    [...ordens.map(getOSRevenueDate), ...custosEstoque.map(getPecaDate), ...vendasPDV.map(getSaleDate)]
-  );
-  const render = () => renderDashboardMonth(ordens, custosEstoque, vendasPDV, monthSelect?.value || selectedMonth);
-  monthSelect?.addEventListener("change", render);
-  render();
+  let lastMonth = "";
+  let payload = null;
+
+  const render = () => {
+    if (!payload) return;
+    renderDashboardMonth(payload.ordens, payload.custos, payload.vendas, monthSelect?.value || payload.fallback);
+  };
+
+  const refresh = async () => {
+    const [ordens, estoque, produtos, vendasPDV] = await Promise.all([
+      getCollectionData("ordensServico"),
+      getCollectionData("estoque"),
+      getCollectionData("produtos"),
+      getCollectionData("vendasPDV")
+    ]);
+    const custosEstoque = [...estoque, ...produtos];
+    const fallback = populateMonthSelect(
+      monthSelect,
+      [...ordens.map(getOSRevenueDate), ...custosEstoque.map(getPecaDate), ...vendasPDV.map(getSaleDate)]
+    );
+    if (lastMonth && [...(monthSelect?.options || [])].some((option) => option.value === lastMonth)) {
+      monthSelect.value = lastMonth;
+    }
+    payload = { ordens, custos: custosEstoque, vendas: vendasPDV, fallback };
+    render();
+  };
+
+  monthSelect?.addEventListener("change", () => { lastMonth = monthSelect.value; render(); });
+  await refresh();
+
+  // Tempo real: o painel reage a mudanças nas coleções sem F5,
+  // preservando o mês selecionado no filtro.
+  scheduleAfterSnapshots(["ordensServico", "estoque", "produtos", "vendasPDV"], refresh);
 }
 
 function renderDashboardMonth(ordens, estoque, vendasPDV, selectedMonth) {
