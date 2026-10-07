@@ -20,6 +20,13 @@ import {
   signInWithEmailAndPassword,
   signOut
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAvpMcRt5zNbfLlimqSGaPBeHqAFyDqIIQ",
@@ -33,6 +40,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const storage = getStorage(app);
 
 const page = document.body.dataset.page || "";
 let firestoreNoticeShown = false;
@@ -1260,6 +1268,109 @@ async function gerarNumeroOS() {
   return `OS #${numeroOS}`;
 }
 
+/* ── Fotos do aparelho na OS (Firebase Storage) ──
+   Upload após salvar a OS (precisa do id). Imagens são comprimidas no
+   navegador (máx. 1280px, JPEG ~0.8) para gastar pouco Storage/4G. */
+let fotosNovas = [];      // Files escolhidos, ainda não enviados
+let fotosNaOS = [];       // { url, path } já gravadas na OS
+let fotosRemovidas = [];  // paths marcados para apagar no próximo salvar
+
+function compressImage(file, maxSize = 1280, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read"));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error("decode"));
+      image.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(image.width * scale);
+        canvas.height = Math.round(image.height * scale);
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("encode")), "image/jpeg", quality);
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderFotosPreview() {
+  const grid = byId("fotosPreview");
+  if (!grid) return;
+  const novas = fotosNovas.map((item, index) => `
+    <figure class="foto-thumb">
+      <img src="${item.previewUrl}" alt="Nova foto ${index + 1}">
+      <button type="button" class="foto-remove" data-foto-nova="${index}" title="Remover">×</button>
+    </figure>`);
+  const existentes = fotosNaOS.map((foto) => `
+    <figure class="foto-thumb ${fotosRemovidas.includes(foto.path) ? "is-removed" : ""}">
+      <img src="${foto.url}" alt="Foto da OS" loading="lazy">
+      <button type="button" class="foto-remove" data-foto-existente="${escapeHtml(foto.path)}" title="Remover">×</button>
+    </figure>`);
+  grid.innerHTML = existentes.join("") + novas.join("");
+  if (!fotosNovas.length && !fotosNaOS.length) {
+    grid.innerHTML = `<p class="field-status">Nenhuma foto anexada.</p>`;
+  }
+  grid.querySelectorAll("[data-foto-nova]").forEach((button) => {
+    button.addEventListener("click", () => {
+      fotosNovas.splice(Number(button.dataset.fotoNova), 1);
+      renderFotosPreview();
+    });
+  });
+  grid.querySelectorAll("[data-foto-existente]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const path = button.dataset.fotoExistente;
+      fotosRemovidas = fotosRemovidas.includes(path)
+        ? fotosRemovidas.filter((p) => p !== path)
+        : [...fotosRemovidas, path];
+      renderFotosPreview();
+    });
+  });
+}
+
+function initFotosOS(originalOS) {
+  const input = byId("fotosInput");
+  if (!input) return;
+
+  if (originalOS?.fotos?.length) {
+    fotosNaOS = originalOS.fotos.filter((foto) => foto?.url && foto?.path);
+    fotosRemovidas = [];
+  }
+  renderFotosPreview();
+
+  input.addEventListener("change", () => {
+    const files = [...(input.files || [])].filter((file) => file.type.startsWith("image/"));
+    files.forEach((file) => {
+      if (fotosNovas.length + fotosNaOS.length >= 10) return;
+      fotosNovas.push({ file, previewUrl: URL.createObjectURL(file) });
+    });
+    input.value = "";
+    if (fotosNovas.length + fotosNaOS.length >= 10) showToast("Limite de 10 fotos por OS.", "info");
+    renderFotosPreview();
+  });
+}
+
+async function uploadFotosOS(osId, { manter = true } = {}) {
+  const referencias = manter ? fotosNaOS.filter((foto) => !fotosRemovidas.includes(foto.path)) : [];
+  for (const item of fotosNovas) {
+    const blob = await compressImage(item.file);
+    const path = `ordens/${osId}/foto-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.jpg`;
+    const ref = storageRef(storage, path);
+    await uploadBytes(ref, blob, { contentType: "image/jpeg" });
+    const url = await getDownloadURL(ref);
+    referencias.push({ url, path, criadoEm: new Date().toISOString() });
+  }
+  for (const path of fotosRemovidas) {
+    try { await deleteObject(storageRef(storage, path)); } catch (error) { console.warn("Foto já removida do Storage:", path); }
+  }
+  fotosNovas = [];
+  fotosNaOS = referencias;
+  fotosRemovidas = [];
+  return referencias;
+}
+
 async function initNovaOS() {
   const osForm = byId("osForm");
   if (!osForm) return;
@@ -1294,6 +1405,8 @@ async function initNovaOS() {
   clienteInput?.addEventListener("blur", onClienteChange);
   clienteInput?.addEventListener("focusout", onClienteChange);
 
+  if (!osId) initFotosOS(null);
+
   byId("gerarEntradaPdfBtn")?.addEventListener("click", () => {
     gerarPDFEntrada(getOSPayloadFromForm(originalOS), { print: false });
   });
@@ -1323,6 +1436,7 @@ async function initNovaOS() {
         setValue("valorPecaInput", originalOS.valorPeca || "");
         setValue("maoObraInput", originalOS.maoObra || "");
         setValue("valorTotal", originalOS.valor || "");
+        initFotosOS(originalOS);
       }
     } catch (error) {
       console.error("Erro ao carregar OS para edição:", error);
@@ -1333,8 +1447,16 @@ async function initNovaOS() {
   osForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     const payload = getOSPayloadFromForm(originalOS);
+    const submitButton = osForm.querySelector('[type="submit"]');
+    const temFotos = fotosNovas.length > 0 || fotosRemovidas.length > 0;
 
     try {
+      if (temFotos && submitButton) {
+        submitButton.disabled = true;
+        submitButton.textContent = fotosNovas.length
+          ? `Salvando e enviando ${fotosNovas.length} foto(s)…`
+          : "Salvando…";
+      }
       let savedId = osId;
       let savedOS = payload;
       if (osId) {
@@ -1359,6 +1481,17 @@ async function initNovaOS() {
         showToast("Ordem de Serviço salva com sucesso!");
       }
 
+      if (temFotos && savedId) {
+        try {
+          const fotos = await uploadFotosOS(savedId);
+          await updateDoc(doc(db, "ordensServico", savedId), { fotos });
+          savedOS = { ...savedOS, fotos };
+        } catch (fotoError) {
+          console.error("Falha ao enviar fotos:", fotoError);
+          showToast("OS salva, mas houve falha ao enviar fotos. Abra a OS e tente de novo.", "error");
+        }
+      }
+
       if (!originalOS || statusLabel(originalOS.status) !== statusLabel(payload.status)) {
         await criarMensagemWhatsapp(savedOS, payload.status, { abrirAgora: !osId });
       }
@@ -1367,8 +1500,13 @@ async function initNovaOS() {
       window.location.href = "listar-os.html";
     } catch (error) {
       console.error("Erro ao salvar OS:", error);
-      showToast("Erro ao salvar OS. Verifique o Firebase.");
+      showToast("Erro ao salvar OS. Verifique o Firebase.", "error");
       showFirestoreNotice(error);
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = "Salvar OS";
+      }
     }
   });
 }

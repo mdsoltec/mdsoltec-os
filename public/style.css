@@ -1303,3 +1303,64 @@ select.search-input,
   border: 1px solid var(--line);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 240, 61, 0.05), 0 0 70px rgba(0, 240, 61, 0.05);
 }
+
+/* ══════════ Fotos da OS ══════════ */
+.fotos-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+.fotos-grid .field-status { margin: 0; }
+.foto-thumb {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  margin: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+.foto-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.foto-thumb.is-removed { opacity: 0.35; border-color: var(--red); }
+.foto-thumb.is-removed::after {
+  content: "removida";
+  position: absolute;
+  inset: auto 0 4px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--red);
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.foto-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(2, 4, 3, 0.78);
+  color: var(--red);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.foto-remove:hover { background: var(--red); color: #fff; }
+input[type="file"] { color: var(--muted); }
+input[type="file"]::file-selector-button {
+  background: var(--surface-3);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 12px;
+  margin-right: 10px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+input[type="file"]::file-selector-button:hover { border-color: var(--line-strong); color: var(--green); }
