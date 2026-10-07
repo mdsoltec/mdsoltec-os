@@ -7,8 +7,8 @@
    Apenas GETs same-origin passam por aqui — Firestore/Auth nunca.
    Para invalidar tudo numa publicação, suba o VERSION abaixo.
    ════════════════════════════════════════════════════════════════════ */
-const VERSION = "mdsoltec-os-v1";
-const APP_SHELL = ["./", "index.html", "login.html", "style.css?v=20261007-3", "script.js?v=20261007-3"];
+const VERSION = "mdsoltec-os-v2";
+const APP_SHELL = ["./", "index.html", "login.html", "style.css?v=20261007-4", "js/core.js?v=20261007-4", "js/pdf.js?v=20261007-4", "js/app.js?v=20261007-4"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
