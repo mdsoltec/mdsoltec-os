@@ -946,6 +946,66 @@ async function loadSystemNotifications() {
   });
 }
 
+/* ── Toasts: substituem showToast() com feedback visual não bloqueante ── */
+function toastTypeFor(message) {
+  const text = normalizeText(message);
+  if (/(sucesso|salv|criad|cadastr|atualiz|enviad|concluid|exportad)/.test(text)) return "success";
+  if (/(erro|invalid|nao foi possivel|nao possivel|preench|informe|ja existe|insuficient|sem conex|verifique)/.test(text)) return "error";
+  return "info";
+}
+
+function showToast(message, type) {
+  let host = document.querySelector(".rv-toast-host");
+  if (!host) {
+    host = document.createElement("div");
+    host.className = "rv-toast-host";
+    document.body.appendChild(host);
+  }
+  const toast = document.createElement("div");
+  toast.className = `rv-toast ${type || toastTypeFor(message)}`;
+  toast.setAttribute("role", "status");
+  toast.innerHTML = `<span class="rv-toast-dot" aria-hidden="true"></span><p>${escapeHtml(message)}</p>`;
+  host.appendChild(toast);
+  while (host.children.length > 4) host.firstElementChild.remove();
+  requestAnimationFrame(() => toast.classList.add("is-in"));
+  setTimeout(() => {
+    toast.classList.remove("is-in");
+    setTimeout(() => toast.remove(), 300);
+  }, 4200);
+}
+
+/* ── Modal de confirmação: substitui confirm() nativo ── */
+function confirmDialog(message, { title = "Confirmar ação", confirmText = "Confirmar", cancelText = "Cancelar", danger = false } = {}) {
+  return new Promise((resolve) => {
+    document.querySelector(".rv-modal")?.remove();
+    const backdrop = document.createElement("div");
+    backdrop.className = "rv-modal";
+    backdrop.innerHTML = `
+      <div class="rv-modal-card" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+        <h3>${escapeHtml(title)}</h3>
+        <p>${escapeHtml(message)}</p>
+        <div class="rv-modal-actions">
+          <button type="button" class="btn btn-secondary" data-rv-cancel>${escapeHtml(cancelText)}</button>
+          <button type="button" class="btn ${danger ? "btn-danger" : "btn-primary"}" data-rv-ok>${escapeHtml(confirmText)}</button>
+        </div>
+      </div>`;
+    const close = (value) => {
+      backdrop.classList.remove("is-in");
+      setTimeout(() => backdrop.remove(), 180);
+      resolve(value);
+    };
+    backdrop.querySelector("[data-rv-ok]").addEventListener("click", () => close(true));
+    backdrop.querySelector("[data-rv-cancel]").addEventListener("click", () => close(false));
+    backdrop.addEventListener("click", (event) => { if (event.target === backdrop) close(false); });
+    document.addEventListener("keydown", function esc(event) {
+      if (event.key === "Escape") { document.removeEventListener("keydown", esc); close(false); }
+    });
+    document.body.appendChild(backdrop);
+    requestAnimationFrame(() => backdrop.classList.add("is-in"));
+    backdrop.querySelector("[data-rv-ok]").focus();
+  });
+}
+
 function loginErrorMessage(error) {
   const map = {
     "auth/invalid-email": "E-mail inválido. Confira a digitação.",
@@ -1129,7 +1189,7 @@ async function initNovaOS() {
       if (osId) {
         await updateDoc(doc(db, "ordensServico", osId), payload);
         savedOS = { id: osId, ...originalOS, ...payload };
-        alert("OS atualizada com sucesso!");
+        showToast("OS atualizada com sucesso!");
       } else {
         const numero = await gerarNumeroOS();
         const createdPayload = {
@@ -1145,7 +1205,7 @@ async function initNovaOS() {
           id: created.id,
           ...createdPayload
         };
-        alert("Ordem de Serviço salva com sucesso!");
+        showToast("Ordem de Serviço salva com sucesso!");
       }
 
       if (!originalOS || statusLabel(originalOS.status) !== statusLabel(payload.status)) {
@@ -1156,7 +1216,7 @@ async function initNovaOS() {
       window.location.href = "listar-os.html";
     } catch (error) {
       console.error("Erro ao salvar OS:", error);
-      alert("Erro ao salvar OS. Verifique o Firebase.");
+      showToast("Erro ao salvar OS. Verifique o Firebase.");
       showFirestoreNotice(error);
     }
   });
@@ -1249,7 +1309,7 @@ async function criarMensagemWhatsapp(os, status, options = {}) {
 
   const created = await addDoc(collection(db, "mensagensWhatsapp"), payload);
 
-  if (options.abrirAgora && confirm("Mensagem de WhatsApp criada. Abrir WhatsApp para enviar agora?")) {
+  if (options.abrirAgora && await confirmDialog("Abrir o WhatsApp para enviar a mensagem agora?", { title: "Mensagem criada", confirmText: "Abrir WhatsApp" })) {
     window.open(link, "_blank");
   }
 
@@ -1358,7 +1418,7 @@ function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") 
 
   container.querySelectorAll("[data-delete]").forEach((button) => {
     button.addEventListener("click", async () => {
-      if (!confirm("Tem certeza que deseja excluir esta OS?")) return;
+      if (!(await confirmDialog("A ordem de serviço será excluída definitivamente. Continuar?", { title: "Excluir OS", confirmText: "Excluir", danger: true }))) return;
 
       try {
         await deleteDoc(doc(db, "ordensServico", button.dataset.delete));
@@ -1366,7 +1426,7 @@ function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") 
         renderOrdens(container, ordens, byId("filtroCliente")?.value, byId("filtroStatus")?.value);
       } catch (error) {
         console.error("Erro ao excluir OS:", error);
-        alert("Erro ao excluir OS.");
+        showToast("Erro ao excluir OS.");
         showFirestoreNotice(error);
       }
     });
@@ -1375,13 +1435,13 @@ function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") 
 
 async function gerarPDF(osId, options = {}) {
   if (!window.jspdf?.jsPDF) {
-    alert("Biblioteca de PDF não carregada.");
+    showToast("Biblioteca de PDF não carregada.");
     return;
   }
 
   const osSnap = await getDoc(doc(db, "ordensServico", osId));
   if (!osSnap.exists()) {
-    alert("OS não encontrada.");
+    showToast("OS não encontrada.");
     return;
   }
 
@@ -1402,7 +1462,7 @@ async function gerarPDF(osId, options = {}) {
 
 async function gerarPDFEntrada(os, options = {}) {
   if (!window.jspdf?.jsPDF) {
-    alert("Biblioteca de PDF não carregada.");
+    showToast("Biblioteca de PDF não carregada.");
     return;
   }
 
@@ -1449,7 +1509,7 @@ async function gerarPDFEntrada(os, options = {}) {
 
 async function gerarPDFGarantia(os, options = {}) {
   if (!window.jspdf?.jsPDF) {
-    alert("Biblioteca de PDF não carregada.");
+    showToast("Biblioteca de PDF não carregada.");
     return;
   }
 
@@ -1653,12 +1713,12 @@ function initClientes() {
           criadoEm: new Date().toISOString()
         });
 
-        alert("Cliente cadastrado com sucesso!");
+        showToast("Cliente cadastrado com sucesso!");
         clienteForm.reset();
         carregarClientes();
       } catch (error) {
         console.error("Erro ao cadastrar cliente:", error);
-        alert("Erro ao cadastrar cliente.");
+        showToast("Erro ao cadastrar cliente.");
         showFirestoreNotice(error);
       }
     });
@@ -1850,20 +1910,20 @@ function initEstoque() {
       try {
         if (editingId) {
           await updateDoc(doc(db, collectionName, editingId), payload);
-          alert(`${isProduct ? "Produto" : "Peça"} atualizado(a) com sucesso!`);
+          showToast(`${isProduct ? "Produto" : "Peça"} atualizado(a) com sucesso!`);
         } else {
           await addDoc(collection(db, collectionName), {
             ...payload,
             criadoEm: new Date().toISOString()
           });
-          alert(`${isProduct ? "Produto" : "Peça"} cadastrado(a) com sucesso!`);
+          showToast(`${isProduct ? "Produto" : "Peça"} cadastrado(a) com sucesso!`);
         }
 
         resetStockForm(mode);
         await Promise.all([carregarPecas(), carregarProdutosEstoque()]);
       } catch (error) {
         console.error(`Erro ao salvar ${isProduct ? "produto" : "peça"}:`, error);
-        alert(`Erro ao salvar ${isProduct ? "produto" : "peça"}.`);
+        showToast(`Erro ao salvar ${isProduct ? "produto" : "peça"}.`);
         showFirestoreNotice(error);
       }
     });
@@ -1914,7 +1974,7 @@ async function carregarPecas() {
 
   listaPecas.querySelectorAll("[data-delete-peca]").forEach((button) => {
     button.addEventListener("click", async () => {
-      if (!confirm("Excluir esta peça do estoque técnico?")) return;
+      if (!(await confirmDialog("A peça será excluída do estoque técnico. Continuar?", { title: "Excluir peça", confirmText: "Excluir", danger: true }))) return;
       await deleteDoc(doc(db, "estoque", button.dataset.deletePeca));
       carregarPecas();
     });
@@ -1972,7 +2032,7 @@ async function carregarProdutosEstoque() {
 
   listaProdutos.querySelectorAll("[data-delete-produto]").forEach((button) => {
     button.addEventListener("click", async () => {
-      if (!confirm("Excluir este produto do estoque de venda?")) return;
+      if (!(await confirmDialog("O produto será excluído do estoque de venda. Continuar?", { title: "Excluir produto", confirmText: "Excluir", danger: true }))) return;
       await deleteDoc(doc(db, "produtos", button.dataset.deleteProduto));
       carregarProdutosEstoque();
     });
@@ -2040,7 +2100,7 @@ function adicionarItemPDV() {
   const quantidadeAtual = emCarrinho?.quantidade || 0;
   const estoqueDisponivel = Number(produto.quantidade || 0);
   if (quantidadeAtual + quantidade > estoqueDisponivel) {
-    alert("Quantidade maior que o estoque disponível.");
+    showToast("Quantidade maior que o estoque disponível.");
     return;
   }
 
@@ -2093,7 +2153,7 @@ function renderCarrinhoPDV() {
 
 async function finalizarVendaPDV() {
   if (!pdvCarrinho.length) {
-    alert("Adicione pelo menos um produto.");
+    showToast("Adicione pelo menos um produto.");
     return;
   }
 
@@ -2132,10 +2192,10 @@ async function finalizarVendaPDV() {
     renderCarrinhoPDV();
     await carregarProdutosPDV();
     await carregarVendasPDV();
-    alert("Venda finalizada com sucesso!");
+    showToast("Venda finalizada com sucesso!");
   } catch (error) {
     console.error("Erro ao finalizar venda PDV:", error);
-    alert("Erro ao finalizar venda.");
+    showToast("Erro ao finalizar venda.");
     showFirestoreNotice(error);
   }
 }
@@ -2228,7 +2288,7 @@ function imprimirCupomPDV(venda) {
 
   const printWindow = window.open("", "_blank");
   if (!printWindow) {
-    alert("Permita pop-ups para imprimir o cupom.");
+    showToast("Permita pop-ups para imprimir o cupom.");
     return;
   }
   printWindow.document.open();
@@ -2337,7 +2397,7 @@ async function gerarMensagensPendentes() {
     criadas += 1;
   }
 
-  alert(criadas ? `${criadas} mensagem(ns) pendente(s) gerada(s).` : "Não há novas mensagens pendentes para gerar.");
+  showToast(criadas ? `${criadas} mensagem(ns) pendente(s) gerada(s).` : "Não há novas mensagens pendentes para gerar.");
   await carregarMensagensWhatsapp();
 }
 
@@ -2713,11 +2773,11 @@ function initFichaTecnica() {
         solucoes: valueOf("solucoesFicha"),
         criadoEm: new Date().toISOString()
       });
-      alert("Ficha técnica salva com sucesso!");
+      showToast("Ficha técnica salva com sucesso!");
       form.reset();
     } catch (error) {
       console.error("Erro ao salvar ficha técnica:", error);
-      alert("Erro ao salvar ficha técnica.");
+      showToast("Erro ao salvar ficha técnica.");
       showFirestoreNotice(error);
     }
   });
@@ -2765,12 +2825,12 @@ async function initConfiguracoes() {
         showFirestoreNotice(profileError);
       }
 
-      alert("Configurações salvas com sucesso!");
+      showToast("Configurações salvas com sucesso!");
       refreshTopbarProfile();
       await carregarFuncionarios();
     } catch (error) {
       console.error("Erro ao salvar configurações:", error);
-      alert("Erro ao salvar configurações.");
+      showToast("Erro ao salvar configurações.");
       showFirestoreNotice(error);
     }
   });
@@ -2838,20 +2898,20 @@ function initFuncionarios() {
       const existing = await findUserProfile(payload.email);
       if (existing?.id) {
         await updateDoc(doc(db, "usuarios", existing.id), payload);
-        alert("Funcionário atualizado. Se ele ainda não acessa, crie também o usuário no Firebase Auth.");
+        showToast("Funcionário atualizado. Se ele ainda não acessa, crie também o usuário no Firebase Auth.");
       } else {
         await setDoc(doc(db, "usuarios", userDocId(payload.email)), {
           ...payload,
           criadoEm: new Date().toISOString()
         }, { merge: true });
-        alert("Funcionário cadastrado. Crie também o usuário no Firebase Auth para login com senha real.");
+        showToast("Funcionário cadastrado. Crie também o usuário no Firebase Auth para login com senha real.");
       }
 
       form.reset();
       await carregarFuncionarios();
     } catch (error) {
       console.error("Erro ao cadastrar funcionário:", error);
-      alert("Erro ao cadastrar funcionário.");
+      showToast("Erro ao cadastrar funcionário.");
       showFirestoreNotice(error);
     }
   });
@@ -2988,7 +3048,7 @@ async function exportCollectionCSV(name) {
   // maxAgeMs 0 força releitura: a exportação precisa estar atualizada.
   const rows = await getCollectionData(name, { maxAgeMs: 0 });
   if (!rows.length) {
-    alert(`Nenhum registro em "${name}" para exportar.`);
+    showToast(`Nenhum registro em "${name}" para exportar.`);
     return;
   }
   const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
@@ -3016,7 +3076,7 @@ function initExportarDados() {
         await exportCollectionCSV(button.dataset.export);
       } catch (error) {
         console.error("Exportação falhou:", error);
-        alert("Não foi possível exportar agora. Verifique a conexão e tente de novo.");
+        showToast("Não foi possível exportar agora. Verifique a conexão e tente de novo.");
       } finally {
         button.disabled = false;
         button.textContent = original;

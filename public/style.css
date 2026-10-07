@@ -1176,3 +1176,65 @@ select.search-input,
     width: 100%;
   }
 }
+
+/* ══════════ Toasts (substituem alert) ══════════ */
+.rv-toast-host {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 900;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 36px));
+}
+.rv-toast {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.rv-toast.is-in { opacity: 1; transform: none; }
+.rv-toast p { margin: 0; font-size: 13.5px; color: var(--text); line-height: 1.45; }
+.rv-toast-dot { flex: none; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: var(--blue); }
+.rv-toast.success { border-left-color: var(--green); }
+.rv-toast.success .rv-toast-dot { background: var(--green); box-shadow: 0 0 10px rgba(0, 240, 61, 0.6); }
+.rv-toast.error { border-left-color: var(--red); }
+.rv-toast.error .rv-toast-dot { background: var(--red); box-shadow: 0 0 10px rgba(255, 75, 75, 0.6); }
+.rv-toast.info .rv-toast-dot { background: var(--blue); }
+
+/* ══════════ Modal de confirmação (substitui confirm) ══════════ */
+.rv-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 4, 3, 0.66);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.rv-modal.is-in { opacity: 1; }
+.rv-modal-card {
+  width: min(420px, 100%);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+  transform: translateY(10px) scale(0.98);
+  transition: transform 0.18s ease;
+}
+.rv-modal.is-in .rv-modal-card { transform: none; }
+.rv-modal-card h3 { margin: 0 0 8px; font-size: 16px; color: var(--text); }
+.rv-modal-card p { margin: 0 0 18px; font-size: 14px; line-height: 1.5; color: var(--soft); }
+.rv-modal-actions { display: flex; justify-content: flex-end; gap: 10px; }
