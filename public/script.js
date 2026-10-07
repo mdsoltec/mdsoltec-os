@@ -10,7 +10,9 @@ import {
   deleteDoc as fsDeleteDoc,
   doc,
   updateDoc as fsUpdateDoc,
-  onSnapshot
+  onSnapshot,
+  runTransaction as fsRunTransaction,
+  deleteField as fsDeleteField
 } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import {
   getAuth,
@@ -46,6 +48,23 @@ const COLLECTION_CACHE_TTL_MS = 30000;
 const collectionCache = new Map();    // nome -> { data, ts }
 const collectionInFlight = new Map(); // nome -> Promise em andamento
 
+/* ── Exclusão suave: nada some de verdade ──
+   Registros "excluídos" ganham excluidoEm/excluidoPor e deixam de
+   aparecer em todas as telas; a Lixeira (Configurações) lista, restaura
+   ou apaga definitivamente. */
+function isDeleted(record) {
+  return Boolean(record?.excluidoEm);
+}
+async function softDeleteDoc(ref) {
+  const result = await updateDoc(ref, {
+    excluidoEm: new Date().toISOString(),
+    excluidoPor: getSession()?.email || ""
+  });
+  return result;
+}
+async function restoreDoc(ref) {
+  return updateDoc(ref, { excluidoEm: fsDeleteField(), excluidoPor: fsDeleteField() });
+}
 function invalidateCollection(...names) {
   names.forEach((name) => {
     collectionCache.delete(name);
@@ -152,6 +171,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initFuncionarios();
   initBuscaCliente();
   initExportarDados();
+  initLixeira();
   initMensagens();
   initPDV();
   enhanceSelects();
@@ -568,7 +588,9 @@ async function getCollectionData(name, { maxAgeMs = COLLECTION_CACHE_TTL_MS } = 
   const promise = (async () => {
     try {
       const snapshot = await getDocs(collection(db, name));
-      const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      const data = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter((record) => !isDeleted(record));
       collectionCache.set(name, { data, ts: Date.now() });
       return data;
     } catch (error) {
@@ -592,7 +614,9 @@ async function getCollectionData(name, { maxAgeMs = COLLECTION_CACHE_TTL_MS } = 
 function listenCollection(name, onChange) {
   try {
     return onSnapshot(collection(db, name), (snapshot) => {
-      const data = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+      const data = snapshot.docs
+        .map((item) => ({ id: item.id, ...item.data() }))
+        .filter((record) => !isDeleted(record));
       collectionCache.set(name, { data, ts: Date.now() });
       try { onChange?.(data); } catch (error) { console.warn(`Reação a mudanças em ${name} falhou:`, error); }
     }, (error) => console.warn(`Ouvinte ${name} indisponível:`, error.code || error));
@@ -1219,17 +1243,21 @@ async function findUserProfile(email) {
 }
 
 async function gerarNumeroOS() {
+  // Transação: dois atendentes criando OS ao mesmo tempo nunca recebem
+  // o mesmo número (o Firestore serializa a leitura/escrita do contador).
   const configRef = doc(db, "config", "contadorOS");
-  const configSnap = await getDoc(configRef);
-
-  if (configSnap.exists()) {
-    const numeroOS = configSnap.data().osCounter || 1;
-    await updateDoc(configRef, { osCounter: numeroOS + 1 });
-    return `OS #${numeroOS}`;
-  }
-
-  await setDoc(configRef, { osCounter: 2 });
-  return "OS #1";
+  const numeroOS = await fsRunTransaction(db, async (tx) => {
+    const configSnap = await tx.get(configRef);
+    if (!configSnap.exists()) {
+      tx.set(configRef, { osCounter: 2 });
+      return 1;
+    }
+    const atual = Number(configSnap.data().osCounter || 1);
+    tx.set(configRef, { osCounter: atual + 1 }, { merge: true });
+    return atual;
+  });
+  invalidateCollection("config");
+  return `OS #${numeroOS}`;
 }
 
 async function initNovaOS() {
@@ -1549,7 +1577,8 @@ function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") 
       if (!(await confirmDialog("A ordem de serviço será excluída definitivamente. Continuar?", { title: "Excluir OS", confirmText: "Excluir", danger: true }))) return;
 
       try {
-        await deleteDoc(doc(db, "ordensServico", button.dataset.delete));
+        await softDeleteDoc(doc(db, "ordensServico", button.dataset.delete));
+        showToast("OS movida para a lixeira (Configurações).", "success");
         const ordens = await getCollectionData("ordensServico");
         renderOrdens(container, ordens, byId("filtroCliente")?.value, byId("filtroStatus")?.value);
       } catch (error) {
@@ -2103,7 +2132,8 @@ async function carregarPecas() {
   listaPecas.querySelectorAll("[data-delete-peca]").forEach((button) => {
     button.addEventListener("click", async () => {
       if (!(await confirmDialog("A peça será excluída do estoque técnico. Continuar?", { title: "Excluir peça", confirmText: "Excluir", danger: true }))) return;
-      await deleteDoc(doc(db, "estoque", button.dataset.deletePeca));
+      await softDeleteDoc(doc(db, "estoque", button.dataset.deletePeca));
+      showToast("Peça movida para a lixeira (Configurações).", "success");
       carregarPecas();
     });
   });
@@ -2161,7 +2191,8 @@ async function carregarProdutosEstoque() {
   listaProdutos.querySelectorAll("[data-delete-produto]").forEach((button) => {
     button.addEventListener("click", async () => {
       if (!(await confirmDialog("O produto será excluído do estoque de venda. Continuar?", { title: "Excluir produto", confirmText: "Excluir", danger: true }))) return;
-      await deleteDoc(doc(db, "produtos", button.dataset.deleteProduto));
+      await softDeleteDoc(doc(db, "produtos", button.dataset.deleteProduto));
+      showToast("Produto movido para a lixeira (Configurações).", "success");
       carregarProdutosEstoque();
     });
   });
@@ -2303,15 +2334,25 @@ async function finalizarVendaPDV() {
   };
 
   try {
-    const vendaDoc = await addDoc(collection(db, "vendasPDV"), venda);
-    await Promise.all(pdvCarrinho.map((item) => {
-      const produto = produtosCache.find((produtoItem) => produtoItem.id === item.id);
-      const novaQuantidade = Math.max(Number(produto?.quantidade || 0) - item.quantidade, 0);
-      return updateDoc(doc(db, "produtos", item.id), {
-        quantidade: novaQuantidade,
-        atualizadoEm: new Date().toISOString()
+    // Transação única: grava a venda e dá baixa no estoque com os valores
+    // FRESCOS do banco (não do cache) — duas vendas simultâneas do mesmo
+    // produto não podem mais vender o mesmo item duas vezes.
+    const vendaRef = doc(collection(db, "vendasPDV"));
+    const carrinho = [...pdvCarrinho];
+    await fsRunTransaction(db, async (tx) => {
+      const produtoSnaps = await Promise.all(carrinho.map((item) => tx.get(doc(db, "produtos", item.id))));
+      tx.set(vendaRef, venda);
+      carrinho.forEach((item, index) => {
+        const snap = produtoSnaps[index];
+        const atual = Number(snap?.data()?.quantidade || 0);
+        tx.set(doc(db, "produtos", item.id), {
+          quantidade: Math.max(atual - Number(item.quantidade || 0), 0),
+          atualizadoEm: new Date().toISOString()
+        }, { merge: true });
       });
-    }));
+    });
+    invalidateCollection("vendasPDV", "produtos");
+    const vendaDoc = { id: vendaRef.id };
 
     const vendaFinal = { id: vendaDoc.id, ...venda };
     imprimirCupomPDV(vendaFinal);
@@ -3193,6 +3234,62 @@ async function exportCollectionCSV(name) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/* ── Lixeira: restaura ou apaga de vez registros marcados como excluídos ── */
+const TRASH_COLLECTIONS = ["ordensServico", "estoque", "produtos"];
+const TRASH_LABELS = { ordensServico: "Ordem de Serviço", estoque: "Peça (estoque técnico)", produtos: "Produto (PDV)" };
+
+function trashRecordLabel(name, record) {
+  if (name === "ordensServico") return `${record.numero || "OS"} · ${record.cliente || "-"}`;
+  return [record.tipo, record.marca, record.modelo, record.nome].filter(Boolean).join(" ") || record.id;
+}
+
+async function initLixeira() {
+  const tabela = byId("lixeiraTabela");
+  if (!tabela) return;
+
+  const reload = async () => {
+    const listas = await Promise.all(TRASH_COLLECTIONS.map(async (name) => {
+      const rows = await getCollectionData(name, { maxAgeMs: 0 });
+      return rows.filter((record) => isDeleted(record)).map((record) => ({ name, record }));
+    }));
+    const itens = listas.flat().sort((a, b) => String(b.record.excluidoEm || "").localeCompare(String(a.record.excluidoEm || "")));
+
+    tabela.innerHTML = itens.length ? itens.map(({ name, record }) => `
+      <tr>
+        <td>${escapeHtml(TRASH_LABELS[name] || name)}</td>
+        <td>${escapeHtml(trashRecordLabel(name, record))}</td>
+        <td>${formatDate(record.excluidoEm)}</td>
+        <td>
+          <div class="actions-inline">
+            <button type="button" class="btn btn-sm btn-secondary" data-trash-restore="${name}|${record.id}">Restaurar</button>
+            <button type="button" class="btn btn-sm btn-danger" data-trash-purge="${name}|${record.id}">Apagar de vez</button>
+          </div>
+        </td>
+      </tr>
+    `).join("") : `<tr><td colspan="4" class="empty-state">A lixeira está vazia.</td></tr>`;
+
+    tabela.querySelectorAll("[data-trash-restore]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const [name, id] = button.dataset.trashRestore.split("|");
+        await restoreDoc(doc(db, name, id));
+        showToast("Registro restaurado.", "success");
+        reload();
+      });
+    });
+    tabela.querySelectorAll("[data-trash-purge]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        const [name, id] = button.dataset.trashPurge.split("|");
+        if (!(await confirmDialog("Esta exclusão é PERMANENTE e não pode ser desfeita.", { title: "Apagar definitivamente", confirmText: "Apagar de vez", danger: true }))) return;
+        await deleteDoc(doc(db, name, id));
+        showToast("Registro apagado definitivamente.", "success");
+        reload();
+      });
+    });
+  };
+
+  reload();
 }
 
 function initExportarDados() {
