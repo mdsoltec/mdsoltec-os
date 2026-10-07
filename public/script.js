@@ -2935,3 +2935,8 @@ function initBuscaCliente() {
     if (!formBusca.contains(event.target)) resultadoBusca.style.display = "none";
   });
 }
+
+/* ── PWA: instalação na tela inicial do celular/PC e abertura rápida ── */
+if ("serviceWorker" in navigator && window.location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
