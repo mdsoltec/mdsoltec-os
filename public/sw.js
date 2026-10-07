@@ -8,7 +8,7 @@
    Para invalidar tudo numa publicação, suba o VERSION abaixo.
    ════════════════════════════════════════════════════════════════════ */
 const VERSION = "mdsoltec-os-v1";
-const APP_SHELL = ["./", "index.html", "login.html", "style.css?v=20261007-1", "script.js?v=20261007-1"];
+const APP_SHELL = ["./", "index.html", "login.html", "style.css?v=20261007-2", "script.js?v=20261007-2"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

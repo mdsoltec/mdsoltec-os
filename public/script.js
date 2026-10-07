@@ -1059,6 +1059,72 @@ function confirmDialog(message, { title = "Confirmar ação", confirmText = "Con
   });
 }
 
+/* ── Ícones SVG: interface consistente, sem glyphs de texto soltos ── */
+function svgIcon(paths) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+}
+
+const UI_ICONS = {
+  dashboard: svgIcon('<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>'),
+  "nova-os": svgIcon('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 12v6"/><path d="M9 15h6"/>'),
+  "listar-os": svgIcon('<path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>'),
+  clientes: svgIcon('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>'),
+  estoque: svgIcon('<path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/>'),
+  pdv: svgIcon('<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>'),
+  financeiro: svgIcon('<path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>'),
+  relatorios: svgIcon('<path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/>'),
+  garantias: svgIcon('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+  mensagens: svgIcon('<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>'),
+  "ficha-tecnica": svgIcon('<path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/>'),
+  configuracoes: svgIcon('<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M1 14h6"/><path d="M9 8h6"/><path d="M17 16h6"/>'),
+  folder: svgIcon('<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>'),
+  clock: svgIcon('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/>'),
+  banknote: svgIcon('<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01"/><path d="M18 12h.01"/>'),
+  trend: svgIcon('<path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/>'),
+  check: svgIcon('<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/>'),
+  receipt: svgIcon('<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/>')
+};
+
+const METRIC_ICONS = {
+  "OS abertas": "folder",
+  "OS em atraso": "clock",
+  "Faturamento mês": "banknote",
+  "Lucro mês": "trend",
+  "Serviços concluídos": "check",
+  "Ticket médio": "receipt"
+};
+
+function initIcons() {
+  if (page === "login") return;
+  document.querySelectorAll(".side-link").forEach((link) => {
+    if (link.querySelector(".side-ico")) return;
+    const file = routeFromHref(link.getAttribute("href")).replace(".html", "");
+    const icon = UI_ICONS[file === "index" ? "dashboard" : file];
+    if (icon) link.insertAdjacentHTML("afterbegin", `<span class="side-ico" aria-hidden="true">${icon}</span>`);
+  });
+  document.querySelectorAll(".metric-card").forEach((card) => {
+    const el = card.querySelector(".metric-icon");
+    const label = card.querySelector(".metric-label")?.textContent.trim();
+    const key = METRIC_ICONS[label];
+    if (el && key) el.innerHTML = UI_ICONS[key];
+  });
+}
+
+/* ── Skeletons: feedback de carregamento nas listas do banco ── */
+function renderSkeleton(el, { cols = 4, rows = 4, type = "rows" } = {}) {
+  if (!el || el.innerHTML.trim()) return;
+  const cell = '<span class="rv-skeleton"></span>';
+  if (type === "list") {
+    el.innerHTML = Array.from({ length: rows }, () =>
+      `<li class="compact-item"><span>${cell}<span class="rv-skeleton rv-skel-60"></span></span>${cell}</li>`
+    ).join("");
+    return;
+  }
+  el.innerHTML = Array.from({ length: rows }, () =>
+    `<tr>${Array.from({ length: cols }, () => `<td>${cell}</td>`).join("")}</tr>`
+  ).join("");
+}
+
 function loginErrorMessage(error) {
   const map = {
     "auth/invalid-email": "E-mail inválido. Confira a digitação.",
@@ -2460,6 +2526,10 @@ async function gerarMensagensPendentes() {
 async function initDashboard() {
   if (page !== "dashboard") return;
 
+  renderSkeleton(byId("latestOS"), { cols: 4 });
+  renderSkeleton(byId("upcomingDeliveries"), { type: "list" });
+  renderSkeleton(byId("servicesRanking"), { type: "list" });
+
   const monthSelect = byId("dashboardMonth");
   let lastMonth = "";
   let payload = null;
@@ -3108,7 +3178,7 @@ if ("serviceWorker" in navigator && window.location.protocol === "https:") {
 }
 
 /* ── Versão centralizada: atualize só aqui (rodapé da sidebar) ── */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 document.querySelectorAll(".app-version").forEach((el) => {
   el.innerHTML = `MDSoltec OS ${APP_VERSION}<br>© ${new Date().getFullYear()} MDSoltec`;
 });
