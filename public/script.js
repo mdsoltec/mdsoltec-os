@@ -149,6 +149,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initConfiguracoes();
   initFuncionarios();
   initBuscaCliente();
+  initExportarDados();
   initMensagens();
   initPDV();
   enhanceSelects();
@@ -428,7 +429,7 @@ function getAuthUserOnce(timeoutMs = 800) {
   });
 }
 
-async function restoreSessionFromAuthUser(user) {
+async function restoreSessionFc function restoreSessionFromAuthUser(user) {
   if (!user?.email) return null;
 
   const profile = await findUserProfile(user.email);
@@ -470,8 +471,7 @@ async function logout() {
 function composeAddress(data) {
   return [
     data?.endereco || data?.logradouro,
-    data?.numero,
-    data?.bairro,
+    daro,
     data?.cidade || data?.municipio,
     data?.estado || data?.uf
   ].filter(Boolean).join(", ");
@@ -946,6 +946,20 @@ async function loadSystemNotifications() {
   });
 }
 
+function loginErrorMessage(error) {
+  const map = {
+    "auth/invalid-email": "E-mail inválido. Confira a digitação.",
+    "auth/missing-password": "Informe a senha.",
+    "auth/invalid-credential": "E-mail ou senha incorretos.",
+    "auth/wrong-password": "E-mail ou senha incorretos.",
+    "auth/user-not-found": "Não há conta com este e-mail. Procure o administrador.",
+    "auth/too-many-requests": "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+    "auth/network-request-failed": "Sem conexão com o servidor. Verifique a internet.",
+    "auth/user-disabled": "Esta conta foi desativada. Procure o administrador."
+  };
+  return map[error?.code] || "Não foi possível entrar. Tente novamente em instantes.";
+}
+
 function initLogin() {
   const loginForm = byId("loginForm");
   if (!loginForm) return;
@@ -975,9 +989,27 @@ function initLogin() {
       return;
     } catch (error) {
       console.warn("Login Firebase não concluído:", error);
+      if (status) status.textContent = loginErrorMessage(error);
     }
+  });
 
-    if (status) status.textContent = "Login não autorizado. Verifique o usuário no Firebase Auth.";
+  // Recuperação de senha: envia o link oficial do Firebase Auth para o e-mail.
+  const resetButton = byId("loginReset");
+  resetButton?.addEventListener("click", async () => {
+    const status = byId("loginStatus");
+    const email = valueOf("loginEmail");
+    if (status) status.textContent = "";
+    if (!email) {
+      if (status) status.textContent = "Digite seu e-mail acima e clique novamente para receber o link de redefinição.";
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, email);
+      if (status) status.textContent = "Link de redefinição enviado. Verifique sua caixa de entrada (e o spam).";
+    } catch (error) {
+      console.warn("Redefinição de senha falhou:", error);
+      if (status) status.textContent = loginErrorMessage(error);
+    }
   });
 }
 
@@ -2939,4 +2971,56 @@ function initBuscaCliente() {
 /* ── PWA: instalação na tela inicial do celular/PC e abertura rápida ── */
 if ("serviceWorker" in navigator && window.location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+/* ── Versão centralizada: atualize só aqui (rodapé da sidebar) ── */
+const APP_VERSION = "1.1.0";
+document.querySelectorAll(".app-version").forEach((el) => {
+  el.innerHTML = `MDSoltec OS ${APP_VERSION}<br>© ${new Date().getFullYear()} MDSoltec`;
+});
+
+/* ── Exportação CSV (backup local / direito de portabilidade LGPD) ── */
+function csvCell(value) {
+  return '"' + String(value == null ? "" : value).replace(/"/g, '""') + '"';
+}
+
+async function exportCollectionCSV(name) {
+  // maxAgeMs 0 força releitura: a exportação precisa estar atualizada.
+  const rows = await getCollectionData(name, { maxAgeMs: 0 });
+  if (!rows.length) {
+    alert(`Nenhum registro em "${name}" para exportar.`);
+    return;
+  }
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const lines = [columns, ...rows.map((row) => columns.map((column) => csvCell(row[column])))];
+  // BOM + separador ";" para o Excel pt-BR abrir acentos e colunas certo.
+  const csv = "\uFEFF" + lines.map((line) => line.join(";")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `mdsoltec-${name}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function initExportarDados() {
+  document.querySelectorAll("[data-export]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const original = button.textContent;
+      button.disabled = true;
+      button.textContent = "Exportando…";
+      try {
+        await exportCollectionCSV(button.dataset.export);
+      } catch (error) {
+        console.error("Exportação falhou:", error);
+        alert("Não foi possível exportar agora. Verifique a conexão e tente de novo.");
+      } finally {
+        button.disabled = false;
+        button.textContent = original;
+      }
+    });
+  });
 }

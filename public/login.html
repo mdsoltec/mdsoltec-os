@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
+  <meta name="description" content="Acesso ao MDSoltec OS — gestão de assistência técnica: ordens de serviço, clientes, estoque e PDV.">
+  <meta name="theme-color" content="#040705">
+  <meta name="description" content="Acesso ao MDSoltec OS — gestão de assistência técnica: ordens de serviço, clientes, estoque e PDV.">
+  <meta name="theme-color" content="#040705">
   <meta name="theme-color" content="#040705">
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
@@ -13,6 +17,22 @@
   <link rel="stylesheet" href="style.css?v=20261007-1">
   <title>Login - MDSoltec OS</title>
   <script type="module" src="script.js?v=20261007-1"></script>
+  <style>
+    .login-reset {
+      margin-top: 10px; background: none; border: none; cursor: pointer;
+      color: #9aa8a0; font: inherit; font-size: 13px; text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .login-reset:hover { color: #00f03d; }
+  </style>
+  <style>
+    .login-reset {
+      margin-top: 10px; background: none; border: none; cursor: pointer;
+      color: #9aa8a0; font: inherit; font-size: 13px; text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .login-reset:hover { color: #00f03d; }
+  </style>
 </head>
 <body data-page="login">
   <main class="login-page">
@@ -34,7 +54,8 @@
       </div>
 
       <button type="submit" class="btn btn-primary btn-block">Entrar</button>
-      <small id="loginStatus" class="field-status"></small>
+      <button type="button" id="loginReset" class="login-reset">Esqueci minha senha</button>
+      <small id="loginStatus" class="field-status" role="alert"></small>
     </form>
   </main>
 </body>

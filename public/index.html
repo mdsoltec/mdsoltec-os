@@ -75,37 +75,37 @@
 
         <div class="metrics-grid">
           <article class="metric-card">
-            <span class="metric-icon">□</span>
+            <span class="metric-icon" aria-hidden="true">□</span>
             <span class="metric-label">OS abertas</span>
             <strong id="dashOpenOS" class="metric-value">0</strong>
             <a class="metric-link" href="listar-os.html">Ver todas →</a>
           </article>
           <article class="metric-card">
-            <span class="metric-icon">⊙</span>
+            <span class="metric-icon" aria-hidden="true">⊙</span>
             <span class="metric-label">OS em atraso</span>
             <strong id="dashOverdueOS" class="metric-value">0</strong>
             <a class="metric-link" href="listar-os.html">Ver todas →</a>
           </article>
           <article class="metric-card">
-            <span class="metric-icon">≡</span>
+            <span class="metric-icon" aria-hidden="true">≡</span>
             <span class="metric-label">Faturamento mês</span>
             <strong id="dashRevenue" class="metric-value">R$ 0,00</strong>
             <a class="metric-link" href="financeiro.html">Ver detalhes →</a>
           </article>
           <article class="metric-card">
-            <span class="metric-icon">%</span>
+            <span class="metric-icon" aria-hidden="true">%</span>
             <span class="metric-label">Lucro mês</span>
             <strong id="dashProfit" class="metric-value">R$ 0,00</strong>
             <a class="metric-link" href="financeiro.html">Ver detalhes →</a>
           </article>
           <article class="metric-card">
-            <span class="metric-icon">✓</span>
+            <span class="metric-icon" aria-hidden="true">✓</span>
             <span class="metric-label">Serviços concluídos</span>
             <strong id="dashDone" class="metric-value">0</strong>
             <a class="metric-link" href="relatorios.html">Ver relatório →</a>
           </article>
           <article class="metric-card">
-            <span class="metric-icon">$</span>
+            <span class="metric-icon" aria-hidden="true">$</span>
             <span class="metric-label">Ticket médio</span>
             <strong id="dashAvg" class="metric-value">R$ 0,00</strong>
             <a class="metric-link" href="relatorios.html">Ver detalhes →</a>
@@ -148,6 +148,9 @@
             </div>
             <div class="table-scroll">
               <table class="data-table">
+                <thead>
+                  <tr><th scope="col">OS</th><th scope="col">Data</th><th scope="col">Cliente</th><th scope="col">Status</th></tr>
+                </thead>
                 <tbody id="latestOS"></tbody>
               </table>
             </div>
