@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Consulte o andamento da sua Ordem de Serviço na MDSoltec usando o código impresso no comprovante.">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#040705">
+  <link rel="icon" href="/assets/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="stylesheet" href="style.css?v=20261007-3">
+  <title>Consultar OS - MDSoltec</title>
+  <script type="module" src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+  <style>
+    body {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(1000px 520px at 80% -10%, rgba(0, 240, 61, 0.08), transparent 60%),
+        var(--bg);
+      font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+      color: var(--text);
+    }
+    .consulta-wrap { width: min(560px, 100%); }
+    .consulta-head { text-align: center; margin-bottom: 22px; }
+    .consulta-head img { width: 84px; height: 84px; object-fit: contain; }
+    .consulta-head h1 { margin: 10px 0 4px; font-size: 22px; }
+    .consulta-head p { margin: 0; color: var(--muted); font-size: 14px; }
+    .consulta-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .consulta-form { display: flex; gap: 10px; }
+    .consulta-form input {
+      flex: 1;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .consulta-form input:focus { outline: 2px solid var(--green); outline-offset: 1px; }
+    .consulta-result { margin-top: 18px; }
+    .status-line {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px dashed var(--line);
+      font-size: 14px;
+    }
+    .status-line:last-child { border-bottom: none; }
+    .status-line b { color: var(--soft); min-width: 130px; font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .status-badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 14px;
+      background: var(--green-soft);
+      color: var(--green);
+      border: 1px solid rgba(0, 240, 61, 0.35);
+    }
+    .status-badge.erro { background: rgba(255, 75, 75, 0.1); color: var(--red); border-color: rgba(255, 75, 75, 0.35); }
+    .consulta-foot { text-align: center; margin-top: 16px; color: var(--muted); font-size: 12px; }
+    .consulta-foot a { color: var(--green); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <main class="consulta-wrap">
+    <div class="consulta-head">
+      <img src="/assets/nova_logo.webp" alt="MDSoltec" width="84" height="84">
+      <h1>Acompanhe sua Ordem de Serviço</h1>
+      <p>Digite o código de consulta impresso no seu comprovante ou termo de garantia.</p>
+    </div>
+
+    <div class="consulta-card">
+      <form id="consultaForm" class="consulta-form">
+        <input id="codigoInput" placeholder="EX.: K7P2-M4X9" autocomplete="off" maxlength="12" required>
+        <button type="submit" class="btn btn-primary">Consultar</button>
+      </form>
+      <div id="consultaResult" class="consulta-result" aria-live="polite"></div>
+    </div>
+
+    <p class="consulta-foot">Não achou seu código? Apresente o comprovante de entrada na loja.</p>
+  </main>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+
+    // Mesmo projeto; leitura limitada à coleção pública consultasPublicas
+    // (só dados não sensíveis, escritos pelo sistema interno).
+    const firebaseConfig = {
+      apiKey: "AIzaSyAvpMcRt5zNbfLlimqSGaPBeHqAFyDqIIQ",
+      authDomain: "ods-mdsoltec.firebaseapp.com",
+      projectId: "ods-mdsoltec",
+      storageBucket: "ods-mdsoltec.firebasestorage.app",
+      messagingSenderId: "488952740200",
+      appId: "1:488952740200:web:b5904ed6ce194c9487bedd"
+    };
+    const db = getFirestore(initializeApp(firebaseConfig));
+
+    const result = document.getElementById("consultaResult");
+    const normalize = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9-]/g, "");
+
+    function render(msg, badge, detalhes) {
+      result.innerHTML = `
+        <p><span class="status-badge ${badge || ""}">${msg}</span></p>
+        ${detalhes || ""}`;
+    }
+
+    function linha(titulo, valor) {
+      return valor ? `<div class="status-line"><b>${titulo}</b><span>${valor}</span></div>` : "";
+    }
+
+    async function consultar(codigo) {
+      const limpo = normalize(codigo);
+      if (limpo.length < 6) {
+        render("Código inválido — verifique no comprovante.", "erro");
+        return;
+      }
+      result.innerHTML = `<p class="field-status">Consultando…</p>`;
+      try {
+        const snap = await getDoc(doc(db, "consultasPublicas", limpo));
+        if (!snap.exists()) {
+          render("OS não encontrada. Confira o código ou fale com a loja.", "erro");
+          return;
+        }
+        const os = snap.data();
+        const detalhes = [
+          linha("Cliente", os.cliente || ""),
+          linha("Aparelho", [os.dispositivo, os.marcaModelo].filter(Boolean).join(" · ")),
+          linha("Entrada", os.entrada || ""),
+          linha("Última atualização", os.atualizadoEm || ""),
+          linha("Previsão", os.previsao || ""),
+          os.status ? `<div class="status-line"><b>Status</b><span class="status-badge">${os.status}</span></div>` : ""
+        ].join("");
+        render(`Status: ${os.status || "Em análise"}`, "", detalhes);
+      } catch (error) {
+        console.error(error);
+        render("Serviço indisponível agora. Tente em instantes.", "erro");
+      }
+    }
+
+    document.getElementById("consultaForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      const codigo = document.getElementById("codigoInput").value;
+      history.replaceState(null, "", `?c=${normalize(codigo)}`);
+      consultar(codigo);
+    });
+
+    const inicial = new URLSearchParams(location.search).get("c");
+    if (inicial) {
+      document.getElementById("codigoInput").value = normalize(inicial);
+      consultar(inicial);
+    }
+  </script>
+</body>
+</html>

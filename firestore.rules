@@ -34,6 +34,14 @@ service cloud.firestore {
       allow read, write: if isSignedIn();
     }
 
+    // PORTAL DO CLIENTE: leitura pública SEM login. O app grava aqui
+    // somente dados não sensíveis (status, primeiro nome, aparelho).
+    // Nada de CPF, endereço, telefone ou valores.
+    match /consultasPublicas/{codigo} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+
     match /clientes/{docId} {
       allow read, write: if isSignedIn();
     }

@@ -1481,6 +1481,12 @@ async function initNovaOS() {
         showToast("Ordem de Serviço salva com sucesso!");
       }
 
+      // Portal do cliente: publica/renova o espelho público com o status novo
+      if (savedId) {
+        const codigoConsulta = await syncConsultaPublica(savedOS);
+        if (codigoConsulta) savedOS = { ...savedOS, codigoConsulta };
+      }
+
       if (temFotos && savedId) {
         try {
           const fotos = await uploadFotosOS(savedId);
@@ -1728,6 +1734,71 @@ function renderOrdens(container, ordens, clienteFiltro = "", statusFiltro = "") 
   });
 }
 
+/* ── Portal do cliente: espelho público e seguro da OS ──
+   Grava em consultasPublicas/{codigo} SOMENTE dados não sensíveis
+   (sem CPF, endereço, telefone ou valores). O cliente consulta em
+   /consulta.html pelo código impresso no termo (com QR Code). */
+function gerarCodigoConsulta() {
+  const alfabeto = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // sem I,O,0,1 (confusão)
+  const bloco = () => Array.from({ length: 4 }, () => alfabeto[Math.floor(Math.random() * alfabeto.length)]).join("");
+  return `${bloco()}-${bloco()}`;
+}
+
+async function syncConsultaPublica(os) {
+  try {
+    let codigo = os.codigoConsulta;
+    if (!codigo) {
+      codigo = gerarCodigoConsulta();
+      await updateDoc(doc(db, "ordensServico", os.id), { codigoConsulta: codigo });
+    }
+    await setDoc(doc(db, "consultasPublicas", codigo), {
+      numero: os.numero || "",
+      status: statusLabel(os.status),
+      cliente: (os.cliente || "").split(" ")[0] || "",
+      dispositivo: os.dispositivo || os.aparelho || "",
+      marcaModelo: os.marcaModelo || os.modelo || "",
+      entrada: formatDate(os.data),
+      atualizadoEm: formatDate(new Date().toISOString()),
+      previsao: os.previsaoEntrega ? formatDate(os.previsaoEntrega) : ""
+    }, { merge: true });
+    return codigo;
+  } catch (error) {
+    console.warn("Portal do cliente não sincronizado:", error);
+    return null;
+  }
+}
+
+async function desenharQRConsulta(docPDF, os, margin, y) {
+  let codigo = os.codigoConsulta;
+  if (!codigo && os.id) codigo = await syncConsultaPublica(os);
+  if (!codigo || typeof QRCode === "undefined") return y + 6;
+
+  const url = `${window.location.origin}/consulta.html?c=${codigo}`;
+  const holder = document.createElement("div");
+  holder.style.cssText = "position:fixed;left:-9999px;top:0;";
+  document.body.appendChild(holder);
+  let dataUrl = "";
+  try {
+    await new Promise((resolve) => {
+      new QRCode(holder, { text: url, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
+      setTimeout(resolve, 120);
+    });
+    const canvas = holder.querySelector("canvas");
+    if (canvas) dataUrl = canvas.toDataURL("image/png");
+  } finally {
+    holder.remove();
+  }
+  if (!dataUrl) return y + 6;
+
+  docPDF.addImage(dataUrl, "PNG", margin, y, 22, 22);
+  docPDF.setFontSize(9);
+  docPDF.text("Acompanhe o andamento da sua OS:", margin + 26, y + 7);
+  docPDF.setFontSize(8);
+  docPDF.text(`Código: ${codigo}`, margin + 26, y + 13);
+  docPDF.text(url.replace(/^https?:\/\//, ""), margin + 26, y + 19, { maxWidth: 150 });
+  return y + 26;
+}
+
 async function gerarPDF(osId, options = {}) {
   if (!window.jspdf?.jsPDF) {
     showToast("Biblioteca de PDF não carregada.");
@@ -1849,6 +1920,7 @@ async function gerarPDFGarantia(os, options = {}) {
   ], margin, y, 4.6);
 
   y = ensurePdfSpace(docPDF, y, 245);
+  y = await desenharQRConsulta(docPDF, os, margin, y) + 4;
   docPDF.setFontSize(9);
   docPDF.text("Assinatura do Cliente: ______________________________________________", margin, y);
   y += 11;
@@ -3342,7 +3414,7 @@ if ("serviceWorker" in navigator && window.location.protocol === "https:") {
 }
 
 /* ── Versão centralizada: atualize só aqui (rodapé da sidebar) ── */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 document.querySelectorAll(".app-version").forEach((el) => {
   el.innerHTML = `MDSoltec OS ${APP_VERSION}<br>© ${new Date().getFullYear()} MDSoltec`;
 });

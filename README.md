@@ -57,6 +57,20 @@ Configure o Firebase local (opcional, para emulador de Firestore) em
 `firebase.json`. Login e banco de produção: usar apenas via site publicado
 ou `firebase use <projeto>` correto.
 
+## Recursos 1.3.0
+
+- **Robustez**: número de OS via `runTransaction` (sem duplicar) e venda do
+  PDV atômica (venda + baixa de estoque numa transação só). Exclusões são
+  **soft-delete** com Lixeira em Configurações (restaurar/apagar de vez).
+- **Fotos da OS**: anexe fotos do aparelho (antes/depois) — compressão no
+  navegador (≤1280px), upload no Firebase Storage (`ordens/<id>/`), limite
+  de 10 por OS. Requer Storage ativo no console Firebase.
+- **Portal do cliente**: página pública `consulta.html` consulta o status
+  pelo código impresso no termo de garantia (com **QR Code**). O sistema
+  espelha em `consultasPublicas/` só dados não sensíveis (sem CPF,
+  endereço, telefone ou valores) — única coleção com leitura pública nas
+  regras. O código é gerado no primeiro salvar da OS.
+
 ## Melhorias aplicadas (1.1.0)
 
 - **Segurança** — regras por coleção com `request.auth != null`, default-deny
