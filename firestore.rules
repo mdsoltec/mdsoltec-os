@@ -1,18 +1,72 @@
-rules_version='2'
+rules_version = '2';
+
+// ════════════════════════════════════════════════════════════════════
+// MDSoltec OS — regras do Firestore
+//
+// Antes: modo "teste" (qualquer pessoa lia/escrevia sem login — CPF,
+// telefones, estoque e financeiro expostos; uma regra com data já
+// expirada em 11/09/2025 confirmava o risco).
+// Agora: tudo exige usuário autenticado no Firebase Auth e qualquer
+// coleção NÃO listada abaixo fica NEGADA por padrão.
+//
+// Para criar uma coleção nova, adicione um match explícito aqui.
+// Perfis (admin/técnico/atendente/financeiro) continuam tratados no
+// app; para reforçar no servidor, use custom claims do Auth.
+//
+// Publicar:  firebase deploy --only firestore:rules
+// ════════════════════════════════════════════════════════════════════
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      // This rule allows anyone with your database reference to view, edit,
-      // and delete all data in your database. It is useful for getting
-      // started, but it is configured to expire after 30 days because it
-      // leaves your app open to attackers. At that time, all client
-      // requests to your database will be denied.
-      //
-      // Make sure to write security rules for your app before that time, or
-      // else all client requests to your database will be denied until you
-      // update your rules.
-      allow read, write: if request.time < timestamp.date(2025, 9, 11);
+
+    function isSignedIn() {
+      return request.auth != null;
     }
+
+    // Perfis da equipe (o app lê a lista no login para descobrir o cargo)
+    match /usuarios/{docId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isSignedIn();
+    }
+
+    // Configurações da empresa e contador de OS
+    match /config/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /clientes/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /ordensServico/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /estoque/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /produtos/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /vendasPDV/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /garantias/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /mensagensWhatsapp/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    match /fichasTecnicas/{docId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Qualquer outra coleção: sem regra = acesso negado (inclui leitura
+    // anônima, escrita anônima e coleções criadas no futuro por engano).
   }
 }
